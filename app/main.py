@@ -4,9 +4,10 @@ from contextlib import asynccontextmanager
 import logging
 
 from app.config import settings
-from app.database import close_db
+from app.database import close_db, AsyncSessionLocal
 from app.core.logging import setup_logging
 from app.auth.routes import router as auth_router
+from app.etl.service import run_etl
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -16,7 +17,12 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     logger.info("Starting Portfolio API")
     if settings.etl_on_startup:
-        logger.info("ETL on startup is enabled, but ETL module not yet implemented")
+        logger.info("ETL on startup enabled; running ETL job")
+        try:
+            async with AsyncSessionLocal() as session:
+                await run_etl(session)
+        except Exception as exc:  # pragma: no cover - startup logging
+            logger.exception(f"ETL on startup failed: {exc}")
     if settings.etl_schedule_enabled:
         logger.info(f"ETL scheduling enabled for {settings.etl_schedule_hour}:00")
     yield

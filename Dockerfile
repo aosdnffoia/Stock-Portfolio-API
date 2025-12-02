@@ -19,7 +19,9 @@ COPY . .
 RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
 USER appuser
 
+RUN chmod +x scripts/docker-entrypoint.sh
+
 EXPOSE 8000
 
-# Run the application
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run the application via entrypoint (migrations + seed + api)
+CMD ["./scripts/docker-entrypoint.sh"]
