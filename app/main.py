@@ -6,6 +6,7 @@ import logging
 from app.config import settings
 from app.database import close_db
 from app.core.logging import setup_logging
+from app.auth.routes import router as auth_router
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -13,8 +14,11 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan events."""
     logger.info("Starting Portfolio API")
+    if settings.etl_on_startup:
+        logger.info("ETL on startup is enabled, but ETL module not yet implemented")
+    if settings.etl_schedule_enabled:
+        logger.info(f"ETL scheduling enabled for {settings.etl_schedule_hour}:00")
     yield
     logger.info("Shutting down Portfolio API")
     await close_db()
@@ -38,15 +42,20 @@ app.add_middleware(
 
 @app.get("/healthz")
 async def health_check():
-    """Health check endpoint."""
     return {"ok": True, "service": "portfolio-api"}
 
 
 @app.get("/")
 async def root():
-    """Root endpoint."""
     return {
         "message": "Portfolio API",
         "version": "1.0.0",
         "docs": "/docs",
+        "endpoints": {
+            "auth": "/auth/login, /auth/social, /auth/me",
+            "health": "/healthz"
+        }
     }
+
+
+app.include_router(auth_router, prefix="/auth", tags=["Authentication"])
