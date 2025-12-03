@@ -8,6 +8,7 @@ from app.database import close_db, AsyncSessionLocal
 from app.core.logging import setup_logging
 from app.auth.routes import router as auth_router
 from app.etl.service import run_etl
+from app.portfolio.routes import router as portfolio_router
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -65,3 +66,4 @@ async def root():
 
 
 app.include_router(auth_router, prefix="/auth", tags=["Authentication"])
+app.include_router(portfolio_router, tags=["Portfolio"])
