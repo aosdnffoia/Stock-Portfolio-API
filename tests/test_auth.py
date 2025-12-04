@@ -1,11 +1,17 @@
 import pytest
+from fastapi import HTTPException
+from fastapi.security import HTTPAuthorizationCredentials
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 
 from app.main import app
 from app.database import Base, get_db
 from app.auth.models import User
-from app.core.security import get_password_hash
+from app.core.security import (
+    create_access_token,
+    get_current_user,
+    get_password_hash,
+)
 
 
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
@@ -113,3 +119,55 @@ async def test_protected_route_rejects_invalid_token(client_and_session):
     )
 
     assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_get_current_user_rejects_mismatched_user_id(client_and_session):
+    _, session_factory = client_and_session
+    async with session_factory() as session:
+        user = User(
+            email="demo@example.com",
+            hashed_password=get_password_hash("demo123"),
+            is_active=True,
+            is_superuser=False,
+        )
+        session.add(user)
+        await session.commit()
+        await session.refresh(user)
+
+        token = create_access_token({"sub": user.email, "user_id": user.id + 1})
+        creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
+        with pytest.raises(HTTPException) as exc:
+            await get_current_user(credentials=creds, db=session)
+        assert exc.value.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_get_current_user_rejects_inactive_user(client_and_session):
+    _, session_factory = client_and_session
+    async with session_factory() as session:
+        user = User(
+            email="sleeping@example.com",
+            hashed_password=get_password_hash("demo123"),
+            is_active=False,
+            is_superuser=False,
+        )
+        session.add(user)
+        await session.commit()
+        await session.refresh(user)
+
+        token = create_access_token({"sub": user.email, "user_id": user.id})
+        creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
+        with pytest.raises(HTTPException) as exc:
+            await get_current_user(credentials=creds, db=session)
+        assert exc.value.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_healthz_checks_db(client_and_session):
+    client, _ = client_and_session
+    response = await client.get("/healthz")
+    assert response.status_code == 200
+    body = response.json()
+    assert body.get("ok") is True
+    assert body.get("db") == "up"

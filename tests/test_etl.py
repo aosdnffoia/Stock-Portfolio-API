@@ -127,3 +127,19 @@ async def test_run_etl_updates_existing_price(session_factory):
     assert price is not None
     assert float(price.close) == 104.0
     assert price.volume == 1_500_000
+
+
+@pytest.mark.asyncio
+async def test_run_etl_no_data_returns_zero_and_writes_nothing(session_factory):
+    async with session_factory() as session:
+        processed = await run_etl(session, market_data=[])
+        await session.commit()
+
+    assert processed == 0
+
+    async with session_factory() as session:
+        tickers = (await session.execute(Ticker.__table__.select())).all()
+        prices = (await session.execute(Price.__table__.select())).all()
+
+    assert tickers == []
+    assert prices == []

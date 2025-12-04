@@ -12,7 +12,8 @@ from app.database import get_db
 from app.auth.models import User
 from app.auth.schemas import TokenData
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# bcrypt_sha256 avoids 72b password truncation issues
+pwd_context = CryptContext(schemes=["bcrypt_sha256"], deprecated="auto")
 security = HTTPBearer()
 
 
@@ -45,7 +46,7 @@ def decode_access_token(token: str) -> TokenData:
         payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
         email: str = payload.get("sub")
         user_id: int = payload.get("user_id")
-        if email is None:
+        if email is None or user_id is None:
             raise credentials_exception
         token_data = TokenData(email=email, user_id=user_id)
         return token_data
@@ -59,7 +60,9 @@ async def get_current_user(
 ) -> User:
     token = credentials.credentials
     token_data = decode_access_token(token)
-    result = await db.execute(select(User).where(User.email == token_data.email))
+    result = await db.execute(
+        select(User).where(User.email == token_data.email, User.id == token_data.user_id)
+    )
     user = result.scalar_one_or_none()
     if user is None:
         raise HTTPException(

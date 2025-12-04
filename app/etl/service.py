@@ -11,6 +11,7 @@ from app.config import settings
 from app.etl.models import Ticker, Price
 
 logger = logging.getLogger(__name__)
+FETCH_TIMEOUT_SECONDS = 8.0
 
 
 def _fetch_symbol(symbol: str) -> Optional[dict]:
@@ -49,9 +50,27 @@ def _fetch_symbol(symbol: str) -> Optional[dict]:
         return None
 
 
-async def fetch_market_data(symbols: Iterable[str]) -> List[dict]:
-    """Fetch market data concurrently for a list of symbols."""
-    tasks = [asyncio.to_thread(_fetch_symbol, s) for s in symbols]
+async def _fetch_with_timeout(symbol: str, timeout: float) -> Optional[dict]:
+    try:
+        return await asyncio.wait_for(asyncio.to_thread(_fetch_symbol, symbol), timeout=timeout)
+    except asyncio.TimeoutError:
+        logger.error(f"Timeout fetching {symbol} after {timeout}s")
+        return None
+
+
+async def fetch_market_data(symbols: Iterable[str], timeout: float = FETCH_TIMEOUT_SECONDS, retries: int = 0) -> List[dict]:
+    """Fetch market data concurrently for a list of symbols with simple timeouts/retries."""
+
+    async def fetch_one(sym: str) -> Optional[dict]:
+        attempt = 0
+        while attempt <= retries:
+            result = await _fetch_with_timeout(sym, timeout)
+            if result is not None or attempt == retries:
+                return result
+            attempt += 1
+            await asyncio.sleep(0.5)
+
+    tasks = [fetch_one(s) for s in symbols]
     results = await asyncio.gather(*tasks)
     return [r for r in results if r]
 
