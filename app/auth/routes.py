@@ -39,7 +39,7 @@ async def login(user_credentials: UserLogin, db: AsyncSession = Depends(get_db))
 
 @router.post("/social", response_model=Token)
 async def social_login(
-    provider: str = Query(..., regex="^(google|facebook)$"),
+    provider: str = Query(..., pattern="^(google|facebook)$"),
     social_data: SocialLoginRequest = None,
     db: AsyncSession = Depends(get_db)
 ):

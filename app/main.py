@@ -15,6 +15,8 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 setup_logging()
+# Silence noisy bcrypt version warnings
+logging.getLogger("passlib.handlers.bcrypt").setLevel(logging.ERROR)
 logger = logging.getLogger(__name__)
 
 
